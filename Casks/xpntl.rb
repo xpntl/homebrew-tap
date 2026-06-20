@@ -7,7 +7,7 @@ cask "xpntl" do
   desc "Native macOS client for xpntl.dev"
   homepage "https://xpntl.dev"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "xpntl.app"
 

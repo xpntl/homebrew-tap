@@ -1,5 +1,5 @@
 # xpntl Homebrew tap
 
 ```bash
-brew install --cask xpntl/tap/xpntl
+brew tap xpntl/tap && brew install xpntl
 ```

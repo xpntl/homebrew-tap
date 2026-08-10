@@ -1,6 +1,6 @@
 cask "xpntl" do
-  version "1.3"
-  sha256 "61286160822607bca93e10f0d203b372f968aa17f741129cbf7283615032dc86"
+  version "1.4"
+  sha256 "d7e397b6b74a850d4ecd0eceb867553cbe01bb8e96503c089c01e12bf17d4319"
 
   url "https://dl.xpntl.dev/clients/macos/xpntl-#{version}.dmg"
   name "xpntl"

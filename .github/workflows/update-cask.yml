@@ -1,0 +1,69 @@
+name: Follow the published version
+
+# Keeps Casks/xpntl.rb at the macOS version dl.xpntl.dev advertises.
+#
+# The xpntl release workflow publishes the DMG and a manifest,
+# https://dl.xpntl.dev/clients/version.json, and stops there. It used to push the
+# cask bump here itself, which needed a credential that could write to this repo
+# from xpntl-ios: deploy keys are disabled for the organization, and the token
+# that remained would have been someone's personal one. This repo can update
+# itself with its own token, so it does, from the same manifest the cask's
+# livecheck already reads.
+#
+# Hourly, and by hand. GitHub pauses scheduled workflows in a public repo after
+# 60 days without activity; each bump below is activity, and a paused schedule
+# is re-enabled from the Actions tab.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-cask
+  cancel-in-progress: false
+
+jobs:
+  follow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump the cask to the manifest's version
+        run: |
+          set -euo pipefail
+          # The query string skips the 4-hour edge cache on version.json.
+          M=$(curl -fsSL "https://dl.xpntl.dev/clients/version.json?run=${GITHUB_RUN_ID}")
+          V=$(jq -r '.macos.version // empty' <<<"$M")
+          URL=$(jq -r '.macos.url // empty' <<<"$M")
+          SHA=$(jq -r '.macos.sha256 // empty' <<<"$M")
+          case "$V" in ""|*[!0-9.]*) echo "::error::Unreadable macOS version '$V' in the manifest"; exit 1;; esac
+          CUR=$(sed -nE 's/^  version "(.*)"$/\1/p' Casks/xpntl.rb)
+          if [ "$V" = "$CUR" ]; then
+            echo "Cask already at $V."
+            exit 0
+          fi
+
+          # The cask builds its url from its version. If the manifest points
+          # anywhere else, the cask would install something other than what
+          # it checks.
+          WANT="https://dl.xpntl.dev/clients/macos/xpntl-${V}.dmg"
+          [ "$URL" = "$WANT" ] || { echo "::error::Manifest url $URL is not $WANT"; exit 1; }
+
+          # Checksum the DMG itself, not just the manifest's word for it: a
+          # cask whose sha256 does not match fails every install.
+          curl -fsSL "$URL" -o xpntl.dmg
+          GOT=$(sha256sum xpntl.dmg | cut -d' ' -f1)
+          rm -f xpntl.dmg
+          [ "$GOT" = "$SHA" ] || { echo "::error::$URL is $GOT, the manifest says $SHA"; exit 1; }
+
+          sed -i -E "s/^  version \".*\"$/  version \"$V\"/; s/^  sha256 \".*\"$/  sha256 \"$SHA\"/" Casks/xpntl.rb
+          git diff --stat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "xpntl $V"
+          git push
+          echo "Bumped the cask from $CUR to $V." >> "$GITHUB_STEP_SUMMARY"
